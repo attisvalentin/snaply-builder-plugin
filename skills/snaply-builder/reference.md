@@ -603,3 +603,210 @@ snaply push --tenant <uuid> --file config.json
 # 5. Sync to local environment (provisions DB, writes Redis)
 snaply pull --tenant <uuid>
 ```
+
+---
+
+## HTTP API Reference (Calling the Running Snaply API)
+
+Use this section when writing scripts, `curl` commands, or client code that talks to a running Snaply API server.
+
+### Connection Basics
+
+- **Base URL**: `http://localhost:<PORT>` (default port from server config, e.g. `8082`)
+- **Required headers on every request:**
+  - `Content-Type: application/json`
+  - `X-Tenant-ID: <tenant-connection-uuid>` — identifies which tenant DB to use
+  - `Authorization: Bearer <jwt>` — only when the endpoint requires auth
+
+### Important Rules
+
+- **No `/api/` prefix** — all routes are at the root (`/query`, `/auth/login`, `/fn/...`)
+- **CRUD endpoints use `table_id` (UUID) in the request body** — NOT table names in the URL
+- **To find table UUIDs**: call `GET /meta/schema` or run `snaply show --tenant <uuid>` and look at `schema.tables[].uuid`
+- **Responses** are always wrapped in `{ "data": ... }` (queries also include `"meta"`)
+- **Filter operators** (`$eq`, `$gt`, `$in`, `$like`, `$null`, etc.) work in `where` clauses for both CRUD and pipeline db steps
+
+---
+
+### Auth Endpoints
+
+Available when `auth_enabled: true` on the tenant and the specific endpoint is enabled in `api_settings.auth_endpoints`.
+
+#### POST /auth/register
+```bash
+curl -X POST http://localhost:8082/auth/register \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: <tenant-uuid>" \
+  -d '{"email": "user@example.com", "password": "SecurePass123!"}'
+```
+Response: `{ "data": { "id": "...", "email": "...", "created_at": "..." } }`
+
+#### POST /auth/login
+```bash
+curl -X POST http://localhost:8082/auth/login \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: <tenant-uuid>" \
+  -d '{"email": "user@example.com", "password": "SecurePass123!"}'
+```
+Response: `{ "data": { "access_token": "eyJ...", "refresh_token": "eyJ...", "expires_in": 3600 } }`
+
+#### POST /auth/refresh
+```bash
+curl -X POST http://localhost:8082/auth/refresh \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: <tenant-uuid>" \
+  -d '{"refresh_token": "eyJ..."}'
+```
+
+---
+
+### CRUD Endpoints
+
+Each CRUD endpoint takes `table_id` (UUID) in the JSON body. Enabled/auth controlled per-table via `api_settings.tables.<table-uuid>.<method>`.
+
+#### POST /query (read data)
+```bash
+curl -X POST http://localhost:8082/query \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: <tenant-uuid>" \
+  -H "Authorization: Bearer <jwt>" \
+  -d '{
+    "table_id": "<table-uuid>",
+    "select": ["id", "name", "email"],
+    "where": { "is_active": true },
+    "order_by": { "created_at": "desc" },
+    "limit": 10,
+    "offset": 0
+  }'
+```
+Response:
+```json
+{
+  "data": [{ "id": "...", "name": "...", "email": "..." }],
+  "meta": { "total": 42, "limit": 10, "offset": 0, "has_more": true }
+}
+```
+
+**Include related tables** (both must be `exposed`):
+```json
+{
+  "table_id": "<table-uuid>",
+  "select": ["id", "name"],
+  "include": [
+    { "table_id": "<related-table-uuid>", "select": ["id", "title"] }
+  ]
+}
+```
+
+#### POST /create (insert record)
+```bash
+curl -X POST http://localhost:8082/create \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: <tenant-uuid>" \
+  -H "Authorization: Bearer <jwt>" \
+  -d '{
+    "table_id": "<table-uuid>",
+    "data": { "name": "Pikachu", "type": "electric", "power": 55 }
+  }'
+```
+Response: `{ "data": { "id": "...", "name": "Pikachu", "type": "electric", "created_at": "..." } }`
+
+#### POST /update (update records)
+```bash
+curl -X POST http://localhost:8082/update \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: <tenant-uuid>" \
+  -H "Authorization: Bearer <jwt>" \
+  -d '{
+    "table_id": "<table-uuid>",
+    "where": { "id": "<record-uuid>" },
+    "data": { "name": "Raichu" }
+  }'
+```
+Response: `{ "data": { "id": "...", "name": "Raichu", "updated_at": "..." } }`
+
+#### POST /delete (delete records)
+```bash
+curl -X POST http://localhost:8082/delete \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: <tenant-uuid>" \
+  -H "Authorization: Bearer <jwt>" \
+  -d '{
+    "table_id": "<table-uuid>",
+    "where": { "id": "<record-uuid>" }
+  }'
+```
+Response: `{ "data": { "deleted": 1 } }`
+
+---
+
+### Meta Endpoint
+
+#### GET /meta/schema
+Returns exposed tables and their readable columns. No auth required.
+```bash
+curl http://localhost:8082/meta/schema \
+  -H "X-Tenant-ID: <tenant-uuid>"
+```
+Use this to discover table UUIDs when writing scripts.
+
+---
+
+### Pipeline Function Endpoints
+
+Route pattern: `/fn/<path>` with the HTTP method defined in the function's `route.method`.
+
+```bash
+# GET function with query params
+curl "http://localhost:8082/fn/total-spent?page=1" \
+  -H "X-Tenant-ID: <tenant-uuid>" \
+  -H "Authorization: Bearer <jwt>"
+
+# POST function with body
+curl -X POST http://localhost:8082/fn/create-order \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: <tenant-uuid>" \
+  -H "Authorization: Bearer <jwt>" \
+  -d '{"product_id": "...", "quantity": 2}'
+```
+
+- `auth_required: true` → must include JWT
+- POST/PUT/PATCH body → available as `request.*` in pipeline context
+- URL query params → available as `query.*` in pipeline context
+
+---
+
+### Scripting Workflow (e.g. Seeding Data)
+
+When writing scripts to seed or test a Snaply tenant:
+
+```bash
+# 1. Get tenant UUID and table UUIDs
+snaply show --tenant <tenant-uuid> | jq '.schema.tables[] | {name, uuid}'
+
+# 2. Register a user (if auth is needed)
+curl -X POST http://localhost:8082/auth/register \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: <tenant-uuid>" \
+  -d '{"email": "seed@test.com", "password": "Pass123!"}'
+
+# 3. Login to get JWT
+TOKEN=$(curl -s -X POST http://localhost:8082/auth/login \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: <tenant-uuid>" \
+  -d '{"email": "seed@test.com", "password": "Pass123!"}' | jq -r '.data.access_token')
+
+# 4. Create records using table UUID (not name!)
+curl -X POST http://localhost:8082/create \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: <tenant-uuid>" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"table_id": "<table-uuid>", "data": {"name": "Thunderbolt", "type": "electric"}}'
+
+# 5. Verify
+curl -X POST http://localhost:8082/query \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: <tenant-uuid>" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"table_id": "<table-uuid>", "limit": 5}'
+```
