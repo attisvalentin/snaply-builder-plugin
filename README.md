@@ -14,7 +14,8 @@ Describe what you want to build in plain English and the plugin generates ready-
 ## Install
 
 ```bash
-claude plugin install <repo-url>
+claude plugin marketplace add <repo-url>
+claude plugin install snaply-builder
 ```
 
 ## Usage
