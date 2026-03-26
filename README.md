@@ -14,7 +14,7 @@ Describe what you want to build in plain English and the plugin generates ready-
 ## Install
 
 ```bash
-claude plugin add <repo-url>
+claude plugin install <repo-url>
 ```
 
 ## Usage
