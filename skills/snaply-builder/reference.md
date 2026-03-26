@@ -752,6 +752,39 @@ Use this to discover table UUIDs when writing scripts.
 
 ---
 
+### Error Log Endpoint
+
+#### GET /logs
+Returns error logs for the tenant, useful for debugging failed requests. All API error responses include descriptive error details (e.g. `"insert failed: duplicate key value violates unique constraint..."`).
+
+```bash
+curl "http://localhost:8082/logs?limit=10&offset=0" \
+  -H "X-Tenant-ID: <tenant-uuid>"
+```
+Response:
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "timestamp": "2026-03-25 18:30:00",
+      "tenant_id": "...",
+      "method": "POST",
+      "path": "/auth/register",
+      "status_code": 400,
+      "error_message": "registration failed: null value in column \"is_active\" violates not-null constraint"
+    }
+  ],
+  "meta": { "total": 5, "limit": 10, "offset": 0 }
+}
+```
+
+- Query params: `limit` (1-200, default 50), `offset` (default 0)
+- Logs are automatically cleaned up after 7 days
+- Use this endpoint to diagnose why requests are failing — the `error_message` field contains the actual database or server error
+
+---
+
 ### Pipeline Function Endpoints
 
 Route pattern: `/fn/<path>` with the HTTP method defined in the function's `route.method`.
@@ -809,4 +842,8 @@ curl -X POST http://localhost:8082/query \
   -H "X-Tenant-ID: <tenant-uuid>" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"table_id": "<table-uuid>", "limit": 5}'
+
+# 6. Debug errors — check error logs for this tenant
+curl "http://localhost:8082/logs?limit=5" \
+  -H "X-Tenant-ID: <tenant-uuid>"
 ```
