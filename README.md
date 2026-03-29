@@ -13,14 +13,23 @@ Describe what you want to build in plain English and the plugin generates ready-
 
 ## Install
 
+### Claude Code
+
 ```bash
-claude plugin marketplace add <repo-url>
+claude plugin marketplace add https://github.com/nicholasgasior/snaply-builder-plugin
 claude plugin install snaply-builder
 ```
 
+### Claude.ai
+
+1. Clone or download this repo
+2. Zip the `skills/snaply-builder` folder
+3. Go to **Settings > Capabilities > Skills**
+4. Upload the zip file
+
 ## Usage
 
-In Claude Code, invoke the skill:
+Invoke the skill directly:
 
 ```
 /snaply-builder a blog with posts and comments
@@ -30,7 +39,7 @@ Or describe your intent in conversation — the skill activates automatically wh
 
 ## Requirements
 
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [Claude.ai](https://claude.ai)
 - [Snaply CLI](https://github.com/nicholasgasior/snaply-cli) (for pushing generated config)
 
 ## License

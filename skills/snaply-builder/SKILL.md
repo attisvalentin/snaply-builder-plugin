@@ -33,7 +33,7 @@ Based on the user's intent, produce one or more of:
 | "table / schema / database / columns" | `schema` JSON fragment |
 | "function / endpoint / route" | `functions` JSON fragment |
 | "job / cron / schedule / nightly / every X" | `cronjobs` JSON fragment |
-| "settings / table permissions / auth / smtp / email config" | `api_settings` JSON fragment |
+| "settings / table permissions / auth / smtp / email config / files" | `api_settings` JSON fragment |
 | "full config / everything / tenant config" | Complete config with all sections |
 
 When the intent spans multiple areas, generate all relevant sections.
@@ -56,6 +56,7 @@ Ask follow-up questions **only if** the answer changes the JSON structure signif
 - Email: raw (inline HTML/text) or template mode? SMTP provider?
 - Cronjobs: how often? (translate plain English to cron expression)
 - api_settings tables: table names, which methods enabled, auth required per method?
+- Files: which file endpoints need auth? (upload, download, delete)
 
 Do not ask about things you can infer or that have sensible defaults (use `enabled: true`, etc.).
 
@@ -113,6 +114,9 @@ Push this via the CLI: `POST /api/cli/tenants/{connection}/config`
 - [ ] No UUIDs anywhere in the output
 - [ ] api_settings.tables uses table **names** as keys (not UUIDs)
 - [ ] api_settings.env is an **array of variable names** (not key-value pairs)
+- [ ] `file_endpoints` uses `enabled`/`auth` booleans per endpoint (`upload`, `download`, `delete`)
+- [ ] Tables storing file paths use `varchar` columns
+- [ ] Do NOT generate `storage` config — storage driver is configured by the admin separately
 
 ## CLI Workflow
 

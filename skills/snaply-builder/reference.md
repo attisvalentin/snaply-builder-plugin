@@ -141,6 +141,11 @@ Defines database tables, columns, and relationships.
           "text": "Hello {{.Name}}, thanks for joining."
         }
       }
+    },
+    "file_endpoints": {
+      "upload":   { "enabled": true, "auth": true },
+      "download": { "enabled": true, "auth": false },
+      "delete":   { "enabled": true, "auth": true }
     }
   }
 }
@@ -159,6 +164,8 @@ Omit or set `"UTC"` for default UTC behaviour.
 **`env`**: Array of environment variable **names** (not key-value pairs). Values are set separately. Names must match `/^[a-zA-Z_][a-zA-Z0-9_]*$/`.
 
 **`email.smtp.encryption`**: `none`, `tls`, or `ssl`.
+
+**`file_endpoints`**: Per-endpoint `enabled`/`auth` settings for file storage. Three endpoints: `upload`, `download`, `delete`. Each has `enabled` (default `true`) and `auth` (default `false`). Set `auth: true` to require JWT. File upload (`POST /files`) returns `{ "path": "...", "size": ..., "mime": "..." }` — store the `path` in a `varchar` column. Storage driver configuration (S3 credentials, local path, etc.) is handled by the admin separately — do NOT generate `storage` config.
 
 **Row policy variables:** `$auth.id` (user UUID from JWT `sub`), `$auth.email`
 
@@ -806,6 +813,52 @@ curl -X POST http://localhost:8082/fn/create-order \
 - `auth_required: true` → must include JWT
 - POST/PUT/PATCH body → available as `request.*` in pipeline context
 - URL query params → available as `query.*` in pipeline context
+
+---
+
+### File Endpoints
+
+File storage endpoints for uploading, downloading, and deleting files. The storage driver (S3, local, etc.) must be configured by the admin separately. Enabled/auth controlled via `api_settings.file_endpoints`.
+
+#### POST /files (upload)
+```bash
+curl -X POST http://localhost:8082/files \
+  -H "X-Tenant-ID: <tenant-uuid>" \
+  -H "Authorization: Bearer <jwt>" \
+  -F "file=@photo.jpg" \
+  -F "folder=avatars"
+```
+- `file`: required, multipart file field
+- `folder`: optional, organizes files into subfolders (alphanumeric, hyphens, underscores)
+
+Response:
+```json
+{ "data": { "path": "avatars/a1b2c3d4e5f6.jpg", "size": 245760, "mime": "image/jpeg" } }
+```
+
+Store the returned `path` in a `varchar` column — that's all you need to reference the file later.
+
+#### GET /files/{path} (download)
+```bash
+curl http://localhost:8082/files/avatars/a1b2c3d4e5f6.jpg \
+  -H "X-Tenant-ID: <tenant-uuid>"
+```
+Streams the file with auto-detected `Content-Type` header.
+
+#### DELETE /files/{path} (delete)
+```bash
+curl -X DELETE http://localhost:8082/files/avatars/a1b2c3d4e5f6.jpg \
+  -H "X-Tenant-ID: <tenant-uuid>" \
+  -H "Authorization: Bearer <jwt>"
+```
+Response: `{ "data": { "deleted": true } }`
+
+### Working with Files in Pipelines
+
+- File upload is HTTP-only (not a pipeline step) — the client uploads first, gets back a `path`
+- Store the path in a `varchar` column via `db.insert` or `db.update`
+- Reference the stored path in responses or pipeline logic like any other column value
+- To build a "profile picture upload" flow: client uploads via `POST /files`, then calls a pipeline function with the returned `path` to save it to the user's record
 
 ---
 
