@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "snaply-plugins",
+  "description": "Snaply plugins for Claude Code",
+  "owner": {
+    "name": "Snaply"
+  },
+  "plugins": [
+    {
+      "name": "snaply-builder",
+      "description": "Generate valid Snaply tenant config JSON — schemas, pipeline functions, cronjobs, API settings, and full tenant configs",
+      "source": "./",
+      "category": "development"
+    }
+  ]
+}

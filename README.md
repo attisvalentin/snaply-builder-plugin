@@ -16,7 +16,7 @@ Describe what you want to build in plain English and the plugin generates ready-
 ### Claude Code
 
 ```bash
-claude plugin marketplace add https://github.com/nicholasgasior/snaply-builder-plugin
+claude plugin marketplace add https://github.com/attisvalentin/snaply-builder-plugin
 claude plugin install snaply-builder
 ```
 
