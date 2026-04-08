@@ -24,7 +24,7 @@ claude plugin install snaply-builder
 
 1. Clone or download this repo
 2. Zip the `skills/snaply-builder` folder
-3. Go to **Settings > Capabilities > Skills**
+3. Go to **Customize > Skills > Create skill > Upload a skill**
 4. Upload the zip file
 
 ## Usage
@@ -40,7 +40,7 @@ Or describe your intent in conversation — the skill activates automatically wh
 ## Requirements
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [Claude.ai](https://claude.ai)
-- [Snaply CLI](https://github.com/nicholasgasior/snaply-cli) (for pushing generated config)
+- [Snaply CLI](https://snaply-admin-dev-o5uezc.free.laravel.cloud/docs/cli) (for pushing generated config)
 
 ## License
 
