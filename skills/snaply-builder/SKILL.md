@@ -24,6 +24,21 @@ Read: ${CLAUDE_PLUGIN_ROOT}/skills/snaply-builder/reference.md
 
 Use it to validate every field, step type, and constraint before producing output.
 
+## Pipeline-first approach
+
+**Always generate pipeline functions for data access** — even for simple CRUD-like operations (list, get by ID, create, update, delete). Pipeline functions produce proper RESTful routes (e.g. `GET /fn/users`, `POST /fn/users`, `DELETE /fn/users/:id`) and give full control over auth, response shape, and business logic.
+
+Only use raw CRUD endpoints (`/query`, `/create`, `/update`, `/delete`) when the user **explicitly** asks for them (e.g. "use the CRUD endpoints", "expose via CRUD").
+
+When generating pipeline functions as the sole data access layer:
+- Set `crud_endpoints` to all `false` in `api_settings` to disable raw CRUD routes
+- Do NOT generate `api_settings.tables` entries (they only apply to CRUD endpoints)
+- Auth and row-level access control are handled per-function via `route.auth_required` and pipeline logic
+
+When the user explicitly requests CRUD endpoints:
+- Generate `api_settings.tables` with per-table per-method settings
+- Leave `crud_endpoints` at defaults (all `true`) or as specified
+
 ## What to generate
 
 Based on the user's intent, produce one or more of:
@@ -31,12 +46,12 @@ Based on the user's intent, produce one or more of:
 | Intent | Output |
 |--------|--------|
 | "table / schema / database / columns" | `schema` JSON fragment |
-| "function / endpoint / route" | `functions` JSON fragment |
+| "function / endpoint / route / API" | `functions` JSON fragment (pipeline-first) |
 | "job / cron / schedule / nightly / every X" | `cronjobs` JSON fragment |
 | "settings / table permissions / auth / smtp / email config / files" | `api_settings` JSON fragment |
 | "full config / everything / tenant config" | Complete config with all sections |
 
-When the intent spans multiple areas, generate all relevant sections.
+When the intent spans multiple areas, generate all relevant sections. When generating a "full config" or any data-access API, default to pipeline functions.
 
 ## Important: No UUIDs
 
@@ -117,6 +132,22 @@ Push this via the CLI: `POST /api/cli/tenants/{connection}/config`
 - [ ] `file_endpoints` uses `enabled`/`auth` booleans per endpoint (`upload`, `download`, `delete`)
 - [ ] Tables storing file paths use `varchar` columns
 - [ ] Do NOT generate `storage` config — storage driver is configured by the admin separately
+
+### Relational integrity
+- [ ] Every FK column (e.g. `user_id`, `post_id`, `category_id`) that references another table has a matching entry in `schema.relations`
+- [ ] `relations[].from.table` and `relations[].to.table` both exist in `schema.tables`
+- [ ] `relations[].from.column` exists in the `from` table's columns and `relations[].to.column` exists in the `to` table's columns
+- [ ] FK column type matches the referenced PK column type (e.g. both `uuid`)
+
+### Variable reference integrity
+- [ ] Every `{{variable}}` used in step fields (`where`, `data`, `condition`, `input`, `to`, `subject`, `html`, `text`, `url`, `body`, `args`, `response.data`) traces back to one of:
+  - A built-in context key (`auth.user_id`, `auth.email`, `request.*`, `query.*`, `env.*`, `now`)
+  - An `assign` value from a **preceding** step (variables must be assigned before use)
+  - A loop variable defined by a parent `foreach` (`as` field, default `item`)
+  - `args.*` inside a `function.call` target function
+- [ ] No step references a variable that is only assigned in a **later** step or in an unreachable branch (e.g. only in `else` when used after the `if`)
+- [ ] `{{env.KEY}}` references match a key listed in `api_settings.env`
+- [ ] Cronjob steps do NOT reference `auth.*`, `request.*`, or `query.*` (unavailable in cron context)
 
 ## CLI Workflow
 
