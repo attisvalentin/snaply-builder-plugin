@@ -48,7 +48,7 @@ Based on the user's intent, produce one or more of:
 | "table / schema / database / columns" | `schema` JSON fragment |
 | "function / endpoint / route / API" | `functions` JSON fragment (pipeline-first) |
 | "job / cron / schedule / nightly / every X" | `cronjobs` JSON fragment |
-| "settings / table permissions / auth / smtp / email config / files" | `api_settings` JSON fragment |
+| "settings / table permissions / auth / smtp / email config / files / rate limit / throttle" | `api_settings` JSON fragment |
 | "full config / everything / tenant config" | Complete config with all sections |
 
 When the intent spans multiple areas, generate all relevant sections. When generating a "full config" or any data-access API, default to pipeline functions.
@@ -130,6 +130,7 @@ Push this via the CLI: `POST /api/cli/tenants/{connection}/config`
 - [ ] api_settings.tables uses table **names** as keys (not UUIDs)
 - [ ] api_settings.env is an **array of variable names** (not key-value pairs)
 - [ ] `file_endpoints` uses `enabled`/`auth` booleans per endpoint (`upload`, `download`, `delete`)
+- [ ] `rate_limit` (if present) has shape `{ "enabled": bool, "requests_per_minute": int > 0 }`; omit the block entirely when no limit is desired
 - [ ] Tables storing file paths use `varchar` columns
 - [ ] Do NOT generate `storage` config — storage driver is configured by the admin separately
 

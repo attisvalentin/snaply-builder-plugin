@@ -146,6 +146,10 @@ Defines database tables, columns, and relationships.
       "upload":   { "enabled": true, "auth": true },
       "download": { "enabled": true, "auth": false },
       "delete":   { "enabled": true, "auth": true }
+    },
+    "rate_limit": {
+      "enabled": true,
+      "requests_per_minute": 100
     }
   }
 }
@@ -166,6 +170,8 @@ Omit or set `"UTC"` for default UTC behaviour.
 **`email.smtp.encryption`**: `none`, `tls`, or `ssl`.
 
 **`file_endpoints`**: Per-endpoint `enabled`/`auth` settings for file storage. Three endpoints: `upload`, `download`, `delete`. Each has `enabled` (default `true`) and `auth` (default `false`). Set `auth: true` to require JWT. File upload (`POST /files`) returns `{ "path": "...", "size": ..., "mime": "..." }` — store the `path` in a `varchar` column. Storage driver configuration (S3 credentials, local path, etc.) is handled by the admin separately — do NOT generate `storage` config.
+
+**`rate_limit`**: Per-tenant request rate limit. `enabled: true` + `requests_per_minute: N` caps the tenant at N requests/minute across all endpoints (sliding window, keyed by `X-Tenant-ID`). Each tenant has its own counter — one tenant exhausting their limit cannot affect others. Over-limit requests return `429 Too Many Requests`. Omit the block or set `enabled: false` for no limit.
 
 **Row policy variables:** `$auth.id` (user UUID from JWT `sub`), `$auth.email`
 
