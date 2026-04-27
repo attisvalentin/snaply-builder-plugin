@@ -165,22 +165,49 @@ Use this output to understand what already exists, then generate config that com
 ### Full agent workflow
 
 ```bash
-# 1. Read current tenant config (JSON to stdout, read-only)
+# 1. List tenants to find existing ones
+snaply tenants
+
+# 2a. If a tenant exists — read its current config
 snaply show --tenant <uuid>
 
-# 2. Generate config (this skill) — aware of existing state
+# 2b. If no tenant exists — skip show, the push will create one automatically
+#     (include "name" in the JSON payload to trigger auto-creation)
+
+# 3. Generate config (this skill) — aware of existing state
 #    → produces JSON with schema, functions, cronjobs, api_settings
 
-# 3. Push to admin
+# 4. Push to admin
+#    Existing tenant:
 snaply push --tenant <uuid> --file config.json
+#    New tenant (auto-creates):
+snaply push --file config.json
+#    The response includes tenant_id for subsequent commands
 
-# 4. Sync to local environment (provisions DB, writes Redis)
+# 5. Sync to local environment (provisions DB, writes Redis)
 snaply pull --tenant <uuid>
 ```
+
+### Auto-creating tenants on push
+
+When pushing config **without a tenant UUID**, include `name` (and optionally `auth_enabled`) in the JSON payload. The admin panel creates the tenant and applies the config in a single request.
+
+```json
+{
+  "name": "My Project",
+  "auth_enabled": true,
+  "schema": { ... },
+  "functions": { ... },
+  "api_settings": { ... }
+}
+```
+
+The response returns `tenant_id` — use it for subsequent pushes and pulls. If `auth_enabled` is true, a default `users` table is auto-created and merged with any pushed schema.
 
 ### What happens on push
 
 The admin panel:
+- **Creates tenant** automatically if `name` is provided (no separate step needed)
 - **Validates** all data (column types, step types, cron expressions)
 - **Generates UUIDs** for new tables, columns, functions, cronjobs
 - **Reconciles** with existing config (matches by name — updates existing, creates new)
