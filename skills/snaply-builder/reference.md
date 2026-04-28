@@ -339,6 +339,9 @@ Or multi-field:
 ```json
 { "type": "transform.math", "expression": "{{price}} * {{quantity}} * 1.2", "assign": "totalWithTax" }
 ```
+Operators: `+ - * / %` and `**` (right-associative). Parentheses for grouping. Functions: `abs(x)`, `ceil(x)`, `floor(x)`, `round(x)` (half-away-from-zero), `pow(a, b)`, `min(a, b, ...)`, `max(a, b, ...)`. All math is float64.
+
+Examples: `"ceil({{total}} / {{pageSize}})"`, `"{{n}} % 2"`, `"max({{a}}, {{b}}, 0)"`, `"pow(2, {{exp}})"`, `"({{a}} + {{b}}) / 2"`.
 
 ### transform.datetime
 ```json
