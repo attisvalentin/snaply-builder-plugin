@@ -78,6 +78,22 @@ Defines database tables, columns, and relationships.
 | `bytea` | `BYTEA` | Binary |
 | `enum` | `CREATE TYPE ... AS ENUM` | Requires `enum_values` |
 
+### Lite CLI type mapping
+
+On the **lite CLI** (`snaply_cli_lite`, SQLite-backed) the table above is collapsed to SQLite's four type affinities:
+
+| Schema type(s) | SQLite affinity |
+|---|---|
+| `int`, `bigint`, `smallint`, `tinyint`, `boolean` | `INTEGER` |
+| `decimal`, `numeric`, `real`, `double`, `float` | `REAL` |
+| `blob`, `binary` | `BLOB` |
+| `json`, `jsonb`, `uuid`, `varchar`, `char`, `text`, `timestamp`, `timestamptz`, `date`, `time`, `enum`, everything else | `TEXT` |
+
+Implications when targeting lite:
+- `enum_values` are **not enforced at the DB layer** (no `CREATE TYPE`). If validation matters, add an `if` step in the pipeline.
+- `timestamptz` and `timestamp` are both `TEXT` (ISO-8601). There is no timezone-aware column type — keep using `timestamptz` in the config for forward-compatibility with the full CLI, but don't assume UTC conversion happens at the DB layer.
+- `length`, `precision`, and `scale` are accepted by the JSON but ignored by SQLite. Don't rely on DB-level length enforcement.
+
 ### Column Properties
 
 | Property | Type | Required | Notes |
@@ -592,6 +608,25 @@ snaply show --tenant <uuid>
 # Filter with jq
 snaply show --tenant <uuid> | jq '.schema'
 ```
+
+### Lite CLI caveats on re-push
+
+The lite CLI's DDL engine only applies **additive** changes when you `snaply pull`:
+
+- `CREATE TABLE IF NOT EXISTS` for new tables
+- `ALTER TABLE ADD COLUMN` for new columns
+
+Column drops, renames, type changes, and PK changes are silently **not applied** to the existing SQLite file. For destructive schema work, recover by dropping the local tenant and re-pulling:
+
+```bash
+snaply-lite drop-tenant <uuid>      # deletes SQLite + tenant file + local state
+snaply-lite pull --tenant <uuid>    # fresh provision from the pushed config
+```
+
+(`drop-tenant` is also available on the full CLI as `snaply drop-tenant <uuid>` — there it removes the Postgres database and Redis entry.)
+
+Other lite-only flags:
+- `snaply-lite serve --no-cron` — start the API without the in-process cron scheduler.
 
 ### Push config to admin
 

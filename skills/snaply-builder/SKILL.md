@@ -61,6 +61,28 @@ When the intent spans multiple areas, generate all relevant sections. When gener
 - Cronjobs: identified by **name** (admin generates UUIDs)
 - api_settings tables: use **table names** as keys (admin resolves to UUIDs)
 
+## Lite CLI variant
+
+Snaply ships in two variants. The **full CLI** (`snaply`) uses PostgreSQL + Redis Sentinel; the **lite CLI** (`snaply-lite`) uses SQLite files and a JSON tenant store. The push API and config JSON shape are **identical** — the same generated config works for both. You should detect lite when:
+
+- The working directory is `snaply_cli_lite` (or its CLAUDE.md is in scope)
+- The server binary referenced is `snaply-api-lite`
+- The user invokes commands as `snaply-lite ...`
+- The user mentions "lite", SQLite, no Redis, single binary, or `--no-cron`
+
+When generating for lite, apply these extra constraints on top of the regular rules:
+
+| Concern | Lite behaviour |
+|---|---|
+| Column types | Mapped to SQLite affinities — `int/bigint/smallint/boolean` → `INTEGER`; `decimal/numeric/real/double` → `REAL`; `blob/binary` → `BLOB`; `json/jsonb` and everything else → `TEXT`. UUIDs, varchar, text, timestamps all store as `TEXT`. Don't recommend `timestamptz` semantics — lite stores timestamps as ISO-8601 TEXT and there is no timezone-aware column. |
+| `enum` columns | Not enforced at the DB level (no `CREATE TYPE`). The value still round-trips, but enforcement must live in pipeline steps if needed. |
+| DDL on re-push | Lite only supports **`CREATE TABLE IF NOT EXISTS`** and **`ALTER TABLE ADD COLUMN`**. Column **drops, renames, type changes, and PK changes are not applied** — the SQLite file just stays as-is. Warn the user before generating any such change; the recovery path is `snaply-lite drop-tenant <uuid>` then `snaply-lite pull --tenant <uuid>`. |
+| `relations` / FKs | Lite stores them in the JSON config but does not enforce FK constraints via DDL. Still generate `schema.relations` so the admin and pipeline behave consistently. |
+| Cron | Runs in-process with the API. Use `snaply-lite serve --no-cron` to disable the scheduler locally — useful when iterating on cronjob configs without firing them. |
+| Server env | Only `DATA_DIR`, `PORT`, `ADMIN_URL`, `ENCRYPTION_KEY`, `LOG_INGEST_SECRET_API_SERVER`, and optionally `DISABLE_CRON` — no DB host/port/user/Redis vars. |
+
+The CLI surface is otherwise the same — substitute `snaply-lite` for `snaply` in every command (`snaply-lite tenants`, `snaply-lite show --tenant <uuid>`, `snaply-lite push`, `snaply-lite pull --tenant <uuid>`, `snaply-lite drop-tenant <uuid>`). `drop-tenant` exists in both variants; on lite it removes the SQLite file + tenant JSON + local state, on full it removes the Postgres database + Redis entry.
+
 ## Clarification rules
 
 Ask follow-up questions **only if** the answer changes the JSON structure significantly:
