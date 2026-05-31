@@ -83,6 +83,39 @@ When generating for lite, apply these extra constraints on top of the regular ru
 
 The CLI surface is otherwise the same — substitute `snaply-lite` for `snaply` in every command (`snaply-lite tenants`, `snaply-lite show --tenant <uuid>`, `snaply-lite push`, `snaply-lite pull --tenant <uuid>`, `snaply-lite drop-tenant <uuid>`). `drop-tenant` exists in both variants; on lite it removes the SQLite file + tenant JSON + local state, on full it removes the Postgres database + Redis entry.
 
+## Auth-enabled tenants — always declare the users auth columns
+
+When the generated config targets an `auth_enabled: true` tenant **and** includes a `users` table, **always emit the six auth-managed columns alongside any extras**. The admin pre-populates these on tenant creation (`BuildsAuthSchema::buildAuthSchema` in snaply_admin), but a CLI push that omits them historically wiped them from the stored schema. Declaring them in the push is the safe, self-documenting path — and once an explicit copy is in the payload, `snaply-lite show` (and the admin UI's user-management view) reflect the full table.
+
+| Column | Type | Flags |
+|---|---|---|
+| `id` | `uuid` | `readable: true, creatable: false, updatable: false` |
+| `email` | `varchar` | defaults (`readable: true, creatable: true, updatable: true`) |
+| `password` | `varchar` | `readable: false, creatable: true, updatable: true` |
+| `is_active` | `boolean` | defaults |
+| `created_at` | `timestamp` | `readable: true, creatable: false, updatable: false` |
+| `updated_at` | `timestamp` | `readable: true, creatable: false, updatable: false` |
+
+Place these columns first in the `users` columns array, then add the project's extras after them. Example skeleton for an `auth_enabled` tenant that adds a `role` column:
+
+```json
+{
+  "name": "users",
+  "exposed": true,
+  "columns": [
+    { "name": "id", "type": "uuid", "readable": true, "creatable": false, "updatable": false },
+    { "name": "email", "type": "varchar" },
+    { "name": "password", "type": "varchar", "readable": false, "creatable": true, "updatable": true },
+    { "name": "is_active", "type": "boolean" },
+    { "name": "created_at", "type": "timestamp", "readable": true, "creatable": false, "updatable": false },
+    { "name": "updated_at", "type": "timestamp", "readable": true, "creatable": false, "updatable": false },
+    { "name": "role", "type": "enum", "enum_values": ["parent", "kid"], "default_value": "kid", "readable": true, "creatable": true, "updatable": true }
+  ]
+}
+```
+
+If the user is **not** pushing a `users` table at all (e.g. generating only `functions` or `cronjobs`), this rule doesn't apply — leave the existing stored users alone.
+
 ## Clarification rules
 
 Ask follow-up questions **only if** the answer changes the JSON structure significantly:
