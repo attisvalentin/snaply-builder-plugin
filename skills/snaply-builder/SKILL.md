@@ -24,6 +24,39 @@ Read: ${CLAUDE_PLUGIN_ROOT}/skills/snaply-builder/reference.md
 
 Use it to validate every field, step type, and constraint before producing output.
 
+## Plan limits — check before designing
+
+**Knowing the user's plan is a required first step when designing an API.** The
+admin panel enforces per-plan limits and will reject an over-limit push with
+`403`, so design within the plan from the start instead of generating config that
+fails.
+
+**Always run `snaply me` (or `snaply-lite me`) before generating anything.** It
+returns the user's plan, feature flags, per-database limits, and current usage:
+
+```json
+{
+  "plan": "free",
+  "features": { "branching": false, "ai": false, "priority_support": false },
+  "limits": { "db_limit": 2, "pipeline_functions_per_db": 5, "cron_jobs_per_db": 2 },
+  "usage": { "databases_used": 1 }
+}
+```
+
+Design strictly within what it reports (`null` = unlimited):
+
+| Limit / feature | Rule when generating |
+|---|---|
+| `limits.pipeline_functions_per_db` | Total pipeline functions for the tenant must stay ≤ this (count existing + new). |
+| `limits.cron_jobs_per_db` | Total cron jobs for the tenant must stay ≤ this. |
+| `limits.db_limit` vs `usage.databases_used` | Do **not** create a new tenant (or branch/copy) when `databases_used >= db_limit`. |
+| `features.branching` | Only propose branching when `true`. |
+| `features.ai` | Only generate built-in-AI-dependent config when `true`. |
+
+If the user's request would exceed a limit or needs a disabled feature, **tell
+them up-front and suggest upgrading their plan** — do not silently emit config that
+will 403 on push.
+
 ## Pipeline-first approach
 
 **Always generate pipeline functions for data access** — even for simple CRUD-like operations (list, get by ID, create, update, delete). Pipeline functions produce proper RESTful routes (e.g. `GET /fn/users`, `POST /fn/users`, `DELETE /fn/users/:id`) and give full control over auth, response shape, and business logic.
@@ -65,8 +98,7 @@ When the intent spans multiple areas, generate all relevant sections. When gener
 
 Snaply ships in two variants. The **full CLI** (`snaply`) uses PostgreSQL + Redis Sentinel; the **lite CLI** (`snaply-lite`) uses SQLite files and a JSON tenant store. The push API and config JSON shape are **identical** — the same generated config works for both. You should detect lite when:
 
-- The working directory is `snaply_cli_lite` (or its CLAUDE.md is in scope)
-- The server binary referenced is `snaply-api-lite`
+- The `snaply-lite` binary is installed on PATH — confirm with `which snaply-lite` (typically `/usr/local/bin/snaply-lite`), especially when the full `snaply` CLI is absent
 - The user invokes commands as `snaply-lite ...`
 - The user mentions "lite", SQLite, no Redis, single binary, or `--no-cron`
 
@@ -168,6 +200,7 @@ Push this via the CLI: `POST /api/cli/tenants/{connection}/config`
 
 ## Validation checklist (apply before output)
 
+- [ ] Config stays within the plan's `limits` / `features` (checked via `snaply me`) — functions/cron counts within per-db limits, no new tenant past `db_limit`, branching/ai only when enabled
 - [ ] Step `type` is one of the known types in reference.md
 - [ ] Schema column `type` is one of the valid PostgreSQL types in reference.md
 - [ ] `email.send` has `mode` set to `"raw"` or `"template"`
@@ -207,39 +240,50 @@ Push this via the CLI: `POST /api/cli/tenants/{connection}/config`
 
 ## CLI Workflow
 
-### Before generating: read existing config
+### Before generating: read the plan, then the existing config
 
-Always check the current tenant config before generating new config. The tenant may already have tables (e.g. `users` table auto-created when auth is enabled), functions, or settings that you must build on top of — not duplicate or conflict with.
+First read the user's plan so you design within their limits (see "Plan limits"):
+
+```bash
+snaply me   # outputs plan, features, limits, usage as JSON
+```
+
+Then check the current tenant config. The tenant may already have tables (e.g. `users` table auto-created when auth is enabled), functions, or settings that you must build on top of — not duplicate or conflict with. Existing functions/cron jobs also count toward the per-database limits.
 
 ```bash
 snaply show --tenant <uuid>   # outputs current config as JSON to stdout
 ```
 
-Use this output to understand what already exists, then generate config that complements it.
+Use both outputs to understand the plan and what already exists, then generate config that complements it and stays within limits.
 
 ### Full agent workflow
 
 ```bash
-# 1. List tenants to find existing ones
+# 1. Read the plan first — limits/features govern what you can generate
+snaply me
+
+# 2. List tenants to find existing ones
 snaply tenants
 
-# 2a. If a tenant exists — read its current config
+# 3a. If a tenant exists — read its current config
 snaply show --tenant <uuid>
 
-# 2b. If no tenant exists — skip show, the push will create one automatically
+# 3b. If no tenant exists — skip show, the push will create one automatically
 #     (include "name" in the JSON payload to trigger auto-creation)
+#     Don't create one if usage.databases_used >= limits.db_limit
 
-# 3. Generate config (this skill) — aware of existing state
+# 4. Generate config (this skill) — aware of the plan limits and existing state
 #    → produces JSON with schema, functions, cronjobs, api_settings
 
-# 4. Push to admin
+# 5. Push to admin
 #    Existing tenant:
 snaply push --tenant <uuid> --file config.json
 #    New tenant (auto-creates):
 snaply push --file config.json
 #    The response includes tenant_id for subsequent commands
+#    Over-limit pushes are rejected with HTTP 403 + an upgrade message
 
-# 5. Sync to local environment (provisions DB, writes Redis)
+# 6. Sync to local environment (provisions DB, writes Redis)
 snaply pull --tenant <uuid>
 ```
 
@@ -262,6 +306,7 @@ The response returns `tenant_id` — use it for subsequent pushes and pulls. If 
 ### What happens on push
 
 The admin panel:
+- **Enforces plan limits** — rejects the push with **HTTP 403 + an upgrade message** when it would exceed `db_limit`, `pipeline_functions_per_db`, `cron_jobs_per_db`, or use a disabled feature (e.g. branching). Surface that message to the user and suggest upgrading. Avoid this by checking `snaply me` first.
 - **Creates tenant** automatically if `name` is provided (no separate step needed)
 - **Validates** all data (column types, step types, cron expressions)
 - **Generates UUIDs** for new tables, columns, functions, cronjobs

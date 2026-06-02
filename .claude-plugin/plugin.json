@@ -1,6 +1,6 @@
 {
   "name": "snaply-builder",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Generate valid Snaply tenant config JSON — schemas, pipeline functions, cronjobs, API settings, and full tenant configs",
   "author": {
     "name": "Snaply"

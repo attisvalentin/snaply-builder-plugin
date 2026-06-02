@@ -597,7 +597,57 @@ Use the right PostgreSQL column type for datetime data:
 
 ---
 
+## Plan limits
+
+The user's subscription plan governs what you can build. **Read it before
+designing** (see "Read account plan" below) and stay within it — the admin panel
+enforces these limits and rejects over-limit pushes with `403`.
+
+`snaply me` / `snaply-lite me` (→ `GET /api/cli/me`) returns:
+
+```json
+{
+  "plan": "free",
+  "features": { "branching": false, "ai": false, "priority_support": false },
+  "limits": { "db_limit": 2, "pipeline_functions_per_db": 5, "cron_jobs_per_db": 2 },
+  "usage": { "databases_used": 1 }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `limits.db_limit` | Max tenants (databases) the user may own. Creating a tenant — including `branch`/`copy` — is blocked once `usage.databases_used >= db_limit`. |
+| `limits.pipeline_functions_per_db` | Max pipeline functions **per tenant**. Count existing + new in a push. |
+| `limits.cron_jobs_per_db` | Max cron jobs **per tenant**. |
+| `features.branching` | Branching a tenant is only allowed when `true`. |
+| `features.ai` | Built-in AI features are only available when `true`. |
+| `usage.databases_used` | How many tenants the user currently owns. |
+
+- `null` on any limit means **unlimited**.
+- Per-database limits (`pipeline_functions_per_db`, `cron_jobs_per_db`) apply to
+  **each** tenant separately, not across the account.
+
+**Limit-exceeded push behavior** — the push fails with HTTP `403` and a message
+such as:
+- `Database limit reached for your plan. Upgrade to create more.`
+- `Your plan allows up to N pipeline functions per database. Upgrade to add more.`
+- `Your plan allows up to N cron jobs per database. Upgrade to add more.`
+- `Branching is not available on your plan. Upgrade to use it.`
+
+If a request can't fit the plan, explain it and suggest upgrading rather than
+generating config that will be rejected.
+
 ## CLI Usage
+
+### Read account plan
+
+```bash
+# Output the user's plan, features, limits and usage as JSON (read-only)
+snaply me
+
+# Just the limits
+snaply me | jq '.limits'
+```
 
 ### Read current tenant config
 
@@ -644,14 +694,17 @@ echo '{"schema":{...}}' | snaply push --tenant <uuid>
 # 1. Authenticate (one-time)
 snaply login
 
-# 2. Read current config (check existing tables, settings, etc.)
+# 2. Read the plan (limits/features govern what you can generate)
+snaply me
+
+# 3. Read current config (check existing tables, settings, etc.)
 snaply show --tenant <uuid>
 
-# 3. Generate config JSON (this skill)
-# 4. Push to admin
+# 4. Generate config JSON (this skill) — within the plan limits
+# 5. Push to admin (rejected with 403 if it exceeds the plan)
 snaply push --tenant <uuid> --file config.json
 
-# 5. Sync to local environment (provisions DB, writes Redis)
+# 6. Sync to local environment (provisions DB, writes Redis)
 snaply pull --tenant <uuid>
 ```
 
