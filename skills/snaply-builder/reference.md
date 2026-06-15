@@ -137,7 +137,10 @@ Implications when targeting lite:
     },
     "auth_endpoints": { "register": true, "login": true, "refresh": true },
     "crud_endpoints":  { "query": true, "create": true, "update": true, "delete": true },
-    "env": ["STRIPE_API_KEY", "WEBHOOK_SECRET"],
+    "env": {
+      "STRIPE_API_KEY": "__SET_IN_ADMIN_PANEL__",
+      "WEBHOOK_SECRET":  "__SET_IN_ADMIN_PANEL__"
+    },
     "email": {
       "smtp": {
         "enabled": true,
@@ -181,7 +184,11 @@ Implications when targeting lite:
 Does **not** affect `timestamptz` columns — those are always stored as UTC and need no special handling.
 Omit or set `"UTC"` for default UTC behaviour.
 
-**`env`**: Array of environment variable **names** (not key-value pairs). Values are set separately. Names must match `/^[a-zA-Z_][a-zA-Z0-9_]*$/`.
+**`env`**: Key→value object of environment variables. Keys must match `/^[a-zA-Z_][a-zA-Z0-9_]*$/`. **Never put real secret values here** — the CLI cannot set secret values, and secrets must never appear in config, agent context, or git. Declare each key with the placeholder `"__SET_IN_ADMIN_PANEL__"`; the user sets the real value afterwards in the admin panel (Settings → Environment).
+
+Stored values are encrypted with an `enc:` prefix (e.g. `"TEST": "enc:Tff7…"`), so `snaply show` returns `enc:…` blobs, never plaintext. **On re-push, omit any env key whose stored value starts with `enc:`** — it is already set by the user, and re-sending it risks overwriting the real secret with a placeholder. Only emit keys that are new (absent from `snaply show`), each with the placeholder value.
+
+References use the **exact, case-sensitive** key: `{{env.STRIPE_API_KEY}}` resolves the key `STRIPE_API_KEY`. A casing mismatch resolves to empty with no error.
 
 **`email.smtp.encryption`**: `none`, `tls`, or `ssl`.
 
@@ -397,7 +404,7 @@ Called function receives args as `{{args.user_id}}`, `{{args.amount}}`. Max recu
   "type": "http.request",
   "url": "https://api.stripe.com/v1/charges",
   "method": "POST",
-  "headers": { "Authorization": "Bearer {{env.stripe_api_key}}" },
+  "headers": { "Authorization": "Bearer {{env.STRIPE_API_KEY}}" },
   "body": { "amount": "{{totalCents}}", "currency": "usd" },
   "assign": "charge"
 }

@@ -167,6 +167,11 @@ Do not ask about things you can infer or that have sensible defaults (use `enabl
 1. A short sentence explaining what you're generating
 2. A single fenced JSON block — valid, pretty-printed, ready to push via CLI
 3. A one-line note showing which top-level key(s) this belongs to
+4. **If the config includes `api_settings.env`**, end with a required warning block listing **every** env key the config touches (new keys + any referenced existing keys), e.g.:
+
+   > ⚠️ **Set real values in the admin panel** (Settings → Environment) for these keys before using the API — they currently hold placeholders or must be verified: `STRIPE_API_KEY`, `WEBHOOK_SECRET`.
+
+   Existing (encrypted) keys are included in the warning too, because you cannot tell from an `enc:` blob whether the user ever filled in a real value.
 
 Example output structure:
 ```
@@ -216,7 +221,9 @@ Push this via the CLI: `POST /api/cli/tenants/{connection}/config`
 - [ ] Datetime columns: recommend `timestamptz` for absolute events (orders, expiry, bookings); `timestamp` only for recurring/wall-clock times (opening hours)
 - [ ] No UUIDs anywhere in the output
 - [ ] api_settings.tables uses table **names** as keys (not UUIDs)
-- [ ] api_settings.env is an **array of variable names** (not key-value pairs)
+- [ ] api_settings.env is a **key→value object**; every NEW key uses the placeholder value `"__SET_IN_ADMIN_PANEL__"` (never a real secret)
+- [ ] On re-push, env keys whose stored value starts with `enc:` are OMITTED from the payload (already set by the user — do not overwrite)
+- [ ] No real secret values anywhere (no `enc:…` written by the agent, no `sk_live_…`, tokens, or passwords)
 - [ ] `file_endpoints` uses `enabled`/`auth` booleans per endpoint (`upload`, `download`, `delete`)
 - [ ] `rate_limit` (if present) has shape `{ "enabled": bool, "requests_per_minute": int > 0 }`; omit the block entirely when no limit is desired
 - [ ] Tables storing file paths use `varchar` columns
@@ -235,7 +242,7 @@ Push this via the CLI: `POST /api/cli/tenants/{connection}/config`
   - A loop variable defined by a parent `foreach` (`as` field, default `item`)
   - `args.*` inside a `function.call` target function
 - [ ] No step references a variable that is only assigned in a **later** step or in an unreachable branch (e.g. only in `else` when used after the `if`)
-- [ ] `{{env.KEY}}` references match a key listed in `api_settings.env`
+- [ ] `{{env.KEY}}` references match a declared `api_settings.env` key **exactly (case-sensitive)**
 - [ ] Cronjob steps do NOT reference `auth.*`, `request.*`, or `query.*` (unavailable in cron context)
 
 ## CLI Workflow
@@ -255,6 +262,8 @@ snaply show --tenant <uuid>   # outputs current config as JSON to stdout
 ```
 
 Use both outputs to understand the plan and what already exists, then generate config that complements it and stays within limits.
+
+**Env reconciliation:** when `snaply show` returns `api_settings.env`, treat any key whose value starts with `enc:` as already-owned by the user (encrypted, unreadable, possibly a real secret). **Omit those keys from your next push** — never re-send them. Only add **new** keys, each with the placeholder value `"__SET_IN_ADMIN_PANEL__"`, and tell the user to fill the real values in the admin panel.
 
 ### Full agent workflow
 
