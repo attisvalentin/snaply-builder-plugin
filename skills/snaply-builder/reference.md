@@ -183,7 +183,9 @@ Omit or set `"UTC"` for default UTC behaviour.
 
 **`env`**: Array of environment variable **names** (not key-value pairs). Values are set separately. Names must match `/^[a-zA-Z_][a-zA-Z0-9_]*$/`.
 
-**`email.smtp.encryption`**: `none`, `tls`, or `ssl`.
+**`email.smtp.encryption`**: `none`, `tls` (STARTTLS, typically port 587), or `ssl` (implicit TLS, typically port 465). The port is read dynamically — match it to the encryption your host allows (e.g. use `587`/`tls` where outbound `465` is blocked).
+
+**`email.smtp.provider`**: free-form label (e.g. `custom`, `resend`, `sendgrid`, `mailgun`, `ses`, `gmail`). For Gmail use `host: smtp.gmail.com`, `port: 587`, `encryption: tls`, `username`: the Gmail address, `password`: a Google **App Password** (requires 2-Step Verification — a normal account password will not work).
 
 **`file_endpoints`**: Per-endpoint `enabled`/`auth` settings for file storage. Three endpoints: `upload`, `download`, `delete`. Each has `enabled` (default `true`) and `auth` (default `false`). Set `auth: true` to require JWT. File upload (`POST /files`) returns `{ "path": "...", "size": ..., "mime": "..." }` — store the `path` in a `varchar` column. Storage driver configuration (S3 credentials, local path, etc.) is handled by the admin separately — do NOT generate `storage` config.
 
