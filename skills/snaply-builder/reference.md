@@ -169,6 +169,9 @@ Implications when targeting lite:
     "rate_limit": {
       "enabled": true,
       "requests_per_minute": 100
+    },
+    "cors": {
+      "allowed_origin": "https://app.example.com"
     }
   }
 }
@@ -197,6 +200,13 @@ References use the **exact, case-sensitive** key: `{{env.STRIPE_API_KEY}}` resol
 **`file_endpoints`**: Per-endpoint `enabled`/`auth` settings for file storage. Three endpoints: `upload`, `download`, `delete`. Each has `enabled` (default `true`) and `auth` (default `false`). Set `auth: true` to require JWT. File upload (`POST /files`) returns `{ "path": "...", "size": ..., "mime": "..." }` — store the `path` in a `varchar` column. Storage driver configuration (S3 credentials, local path, etc.) is handled by the admin separately — do NOT generate `storage` config.
 
 **`rate_limit`**: Per-tenant request rate limit. `enabled: true` + `requests_per_minute: N` caps the tenant at N requests/minute across all endpoints (sliding window, keyed by `X-Tenant-ID`). Each tenant has its own counter — one tenant exhausting their limit cannot affect others. Over-limit requests return `429 Too Many Requests`. Omit the block or set `enabled: false` for no limit.
+
+**`cors`**: Controls which **browser** origins may read responses from the tenant API. Single field `cors.allowed_origin`, a string:
+- `"*"` — allow any origin.
+- One exact origin `scheme://host[:port]` with **no path** (e.g. `"https://app.example.com"`, `"http://localhost:3000"`). The Go API server sends `Access-Control-Allow-Origin` only when the request's `Origin` matches it exactly.
+- Omit the block (or empty string) for no CORS header — browsers on other origins cannot read responses (the default).
+
+A path (`"https://example.com/app"`) or an array is **invalid** — the admin rejects it. Only affects browser JS; server-to-server, CLI, and `curl`/Postman ignore CORS. Credentials mode is not used (no `Access-Control-Allow-Credentials`), so authenticate with the `Authorization` Bearer header, not cookies.
 
 **Row policy variables:** `$auth.id` (user UUID from JWT `sub`), `$auth.email`
 
@@ -716,6 +726,24 @@ snaply push --tenant <uuid> --file config.json
 # 6. Sync to local environment (provisions DB, writes Redis)
 snaply pull --tenant <uuid>
 ```
+
+### Browse data with Studio
+
+`snaply studio` launches a local, **read-only** web data browser (Drizzle-Studio style — no writes are ever issued) and opens it in the default browser. Use it to inspect tenant tables and rows while developing config.
+
+```bash
+# Start Studio and open it in the browser
+snaply studio
+
+# Don't auto-open the browser (e.g. over SSH)
+snaply studio --no-open
+
+# Browse via a remote Snaply API instead of the local DB
+snaply studio --proxy https://api.example.com
+```
+
+- Protected by HTTP Basic Auth: username is always `studio`, password is the `studio_secret` set via `snaply configure`. Port defaults to `4983` (`studio_port`).
+- Full CLI reads directly from PostgreSQL (discovers tenants from Redis); `snaply-lite studio` reads the embedded SQLite files (discovers tenants from local JSON config). The `--no-open` and `--proxy` flags behave identically on both.
 
 ---
 

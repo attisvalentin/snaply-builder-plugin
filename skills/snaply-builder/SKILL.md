@@ -226,6 +226,7 @@ Push this via the CLI: `POST /api/cli/tenants/{connection}/config`
 - [ ] No real secret values anywhere (no `enc:…` written by the agent, no `sk_live_…`, tokens, or passwords)
 - [ ] `file_endpoints` uses `enabled`/`auth` booleans per endpoint (`upload`, `download`, `delete`)
 - [ ] `rate_limit` (if present) has shape `{ "enabled": bool, "requests_per_minute": int > 0 }`; omit the block entirely when no limit is desired
+- [ ] `cors` (if present) has shape `{ "allowed_origin": string }` where the value is `"*"` or one exact `scheme://host[:port]` origin with **no path** and no array; omit the block when CORS is not needed
 - [ ] Tables storing file paths use `varchar` columns
 - [ ] Do NOT generate `storage` config — storage driver is configured by the admin separately
 
