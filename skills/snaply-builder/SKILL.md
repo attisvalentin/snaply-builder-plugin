@@ -264,7 +264,7 @@ snaply show --tenant <uuid>   # outputs current config as JSON to stdout
 
 Use both outputs to understand the plan and what already exists, then generate config that complements it and stays within limits.
 
-**Env reconciliation:** when `snaply show` returns `api_settings.env`, treat any key whose value starts with `enc:` as already-owned by the user (encrypted, unreadable, possibly a real secret). **Omit those keys from your next push** — never re-send them. Only add **new** keys, each with the placeholder value `"__SET_IN_ADMIN_PANEL__"`, and tell the user to fill the real values in the admin panel.
+**Env reconciliation:** read the current config with `snaply show` first, then emit only the env keys you are **adding or intentionally changing** — each new key with the placeholder value `"__SET_IN_ADMIN_PANEL__"`, and tell the user to fill the real values in the admin panel. Never put real secrets in config. The admin keeps every env key you omit, and re-sending the placeholder will not overwrite a value the user already set, so leaving existing keys out is always safe.
 
 ### Full agent workflow
 
@@ -322,4 +322,4 @@ The admin panel:
 - **Generates UUIDs** for new tables, columns, functions, cronjobs
 - **Reconciles** with existing config (matches by name — updates existing, creates new)
 - **Publishes** schema changes immediately (sets published_schema + published_version)
-- **Keeps** existing items not in the payload (safe — no accidental deletion)
+- **Keeps** existing items not in the payload (safe — no accidental deletion). This covers schema tables, functions, cronjobs **and** every `api_settings` subsection — `env`, `email`, `storage`, `rate_limit`, `cors`, `timezone`, `file_endpoints`. A partial push that omits a subsection leaves it untouched, and omitting a secret field (SMTP `password`, storage credentials) preserves the stored value rather than nulling it.

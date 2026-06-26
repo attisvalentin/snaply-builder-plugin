@@ -187,9 +187,9 @@ Implications when targeting lite:
 Does **not** affect `timestamptz` columns — those are always stored as UTC and need no special handling.
 Omit or set `"UTC"` for default UTC behaviour.
 
-**`env`**: Key→value object of environment variables. Keys must match `/^[a-zA-Z_][a-zA-Z0-9_]*$/`. **Never put real secret values here** — the CLI cannot set secret values, and secrets must never appear in config, agent context, or git. Declare each key with the placeholder `"__SET_IN_ADMIN_PANEL__"`; the user sets the real value afterwards in the admin panel (Settings → Environment).
+**`env`**: Key→value object of environment variables. Keys must match `/^[a-zA-Z_][a-zA-Z0-9_]*$/`. **Never put real secret values here** — secrets must never appear in config, agent context, or git. Declare each key with the placeholder `"__SET_IN_ADMIN_PANEL__"`; the user sets the real value afterwards in the admin panel (Settings → Environment).
 
-Stored values are encrypted with an `enc:` prefix (e.g. `"TEST": "enc:Tff7…"`), so `snaply show` returns `enc:…` blobs, never plaintext. **On re-push, omit any env key whose stored value starts with `enc:`** — it is already set by the user, and re-sending it risks overwriting the real secret with a placeholder. Only emit keys that are new (absent from `snaply show`), each with the placeholder value.
+The admin **preserves existing env on push** — keys you omit are kept, and re-sending the `"__SET_IN_ADMIN_PANEL__"` placeholder will **not** overwrite a real value the user already set. So you only need to emit the keys you are adding or intentionally changing; existing keys you leave out survive untouched.
 
 References use the **exact, case-sensitive** key: `{{env.STRIPE_API_KEY}}` resolves the key `STRIPE_API_KEY`. A casing mismatch resolves to empty with no error.
 
