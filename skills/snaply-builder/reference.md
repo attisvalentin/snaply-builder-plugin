@@ -161,6 +161,9 @@ Implications when targeting lite:
         }
       }
     },
+    "storage": {
+      "driver": "local"
+    },
     "file_endpoints": {
       "upload":   { "enabled": true, "auth": true },
       "download": { "enabled": true, "auth": false },
@@ -197,7 +200,22 @@ References use the **exact, case-sensitive** key: `{{env.STRIPE_API_KEY}}` resol
 
 **`email.smtp.provider`**: free-form label (e.g. `custom`, `resend`, `sendgrid`, `mailgun`, `ses`, `gmail`). For Gmail use `host: smtp.gmail.com`, `port: 587`, `encryption: tls`, `username`: the Gmail address, `password`: a Google **App Password** (requires 2-Step Verification — a normal account password will not work).
 
-**`file_endpoints`**: Per-endpoint `enabled`/`auth` settings for file storage. Three endpoints: `upload`, `download`, `delete`. Each has `enabled` (default `true`) and `auth` (default `false`). Set `auth: true` to require JWT. File upload (`POST /files`) returns `{ "path": "...", "size": ..., "mime": "..." }` — store the `path` in a `varchar` column. Storage driver configuration (S3 credentials, local path, etc.) is handled by the admin separately — do NOT generate `storage` config.
+**`file_endpoints`**: Per-endpoint `enabled`/`auth` settings for file storage. Three endpoints: `upload`, `download`, `delete`. Each has `enabled` (default `true`) and `auth` (default `false`). Set `auth: true` to require JWT. File upload (`POST /files`) returns `{ "path": "...", "size": ..., "mime": "..." }` — store the `path` in a `varchar` column. File endpoints need a configured `storage` driver (see below) — generate both together.
+
+**`storage`**: Where uploaded files are kept. Shape: `{ "driver": <name>, "config": { ... }, "max_file_size": <bytes>, "allowed_mimes": [<mime>, ...] }`. `config`, `max_file_size`, and `allowed_mimes` are optional. **`local` is the default** — use it whenever the user is undecided; it needs no `config` and stores files on the API server's filesystem under `{STORAGE_PATH}/{tenant-id}/...` (`STORAGE_PATH` defaults to `./storage` on the full server and `{DATA_DIR}/storage` on lite). When the user wants a cloud/remote backend, set `driver` and the `config` fields below.
+
+| `driver` | required `config` | optional `config` |
+|---|---|---|
+| `local` | _(none)_ | _(none)_ |
+| `s3` | `key`, `secret`, `region`, `bucket` | `endpoint` (for S3-compatible: Cloudflare R2, MinIO, DigitalOcean Spaces) |
+| `ftp` | `host`, `username`, `password` | `port` (default `21`), `root`, `ssl` |
+| `sftp` | `host`, `username`, `password` | `port` (default `22`), `root` |
+| `gcs` | `project_id`, `key_file` (full service-account JSON as a string), `bucket` | _(none)_ |
+| `azure` | `name` (account), `key`, `container` | _(none)_ |
+
+`max_file_size` is in **bytes** (the server also clamps to its own `MAX_FILE_SIZE`); omit for the server default. `allowed_mimes` is a string array whitelist (e.g. `["image/jpeg","image/png","application/pdf"]`); omit to allow any type.
+
+**Storage secrets — same rule as `env`.** The secret fields — `s3.secret`, `ftp.password`, `sftp.password`, `gcs.key_file`, `azure.key` — must **never** contain a real value (no plaintext secret, no `enc:` blob — only the admin can encrypt). For a **new** storage config, set each secret field to the placeholder `"__SET_IN_ADMIN_PANEL__"`; the user enters the real value afterwards in the admin panel (Settings → Storage). On **re-push**, read the current config first and **omit** any secret field whose stored value starts with `enc:` — the admin preserves it, and re-sending a placeholder would overwrite the user's real value. Non-secret fields (`region`, `bucket`, `host`, `endpoint`, etc.) are emitted normally.
 
 **`rate_limit`**: Per-tenant request rate limit. `enabled: true` + `requests_per_minute: N` caps the tenant at N requests/minute across all endpoints (sliding window, keyed by `X-Tenant-ID`). Each tenant has its own counter — one tenant exhausting their limit cannot affect others. Over-limit requests return `429 Too Many Requests`. Omit the block or set `enabled: false` for no limit.
 
@@ -952,7 +970,7 @@ curl -X POST http://localhost:8082/fn/create-order \
 
 ### File Endpoints
 
-File storage endpoints for uploading, downloading, and deleting files. The storage driver (S3, local, etc.) must be configured by the admin separately. Enabled/auth controlled via `api_settings.file_endpoints`.
+File storage endpoints for uploading, downloading, and deleting files. The storage backend is set via `api_settings.storage` (see the **`storage`** subsection under api_settings) — `local` is the default. Enabled/auth controlled via `api_settings.file_endpoints`.
 
 #### POST /files (upload)
 ```bash

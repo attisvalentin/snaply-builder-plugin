@@ -148,6 +148,17 @@ Place these columns first in the `users` columns array, then add the project's e
 
 If the user is **not** pushing a `users` table at all (e.g. generating only `functions` or `cronjobs`), this rule doesn't apply — leave the existing stored users alone.
 
+## Storage (file uploads)
+
+When the config involves file handling — i.e. you're generating `file_endpoints`, or producing a **full / new tenant config** — set up storage yourself; don't leave it to the admin. File endpoints don't work without a storage driver, so generate the two together.
+
+1. **Ask the user which backend they want**: local, S3, FTP, SFTP, GCS, or Azure.
+2. **If they don't know or don't decide, default to `local`** — `{ "storage": { "driver": "local" } }`. Local needs no credentials and stores files on the API server's filesystem; it's the right default for getting started.
+3. **For a cloud/remote backend**, emit the non-secret `config` fields with real values (e.g. `region`, `bucket`, `host`, `endpoint`) and set every **secret** field to the placeholder `"__SET_IN_ADMIN_PANEL__"`. The secret fields are: `s3.secret`, `ftp.password`, `sftp.password`, `gcs.key_file`, `azure.key`.
+4. On a **re-push**, read the current config first (`snaply show`) and **omit** any secret field whose stored value starts with `enc:` — the admin keeps it; re-sending a placeholder would clobber the user's real value. (Same rule as `env`.)
+
+Don't force the storage question on narrow non-file requests (e.g. a lone cronjob or a single function with no uploads) — only when uploads/files or a full config are in play. See the **`storage`** subsection and per-driver field table in `reference.md` for exact shapes.
+
 ## Clarification rules
 
 Ask follow-up questions **only if** the answer changes the JSON structure significantly:
@@ -159,6 +170,7 @@ Ask follow-up questions **only if** the answer changes the JSON structure signif
 - Cronjobs: how often? (translate plain English to cron expression)
 - api_settings tables: table names, which methods enabled, auth required per method?
 - Files: which file endpoints need auth? (upload, download, delete)
+- Storage (when files/full config): which backend — local (default), s3, ftp, sftp, gcs, or azure? For a cloud backend, which non-secret values (region, bucket, host, endpoint, …)? Default to `local` if the user is undecided.
 
 Do not ask about things you can infer or that have sensible defaults (use `enabled: true`, etc.).
 
@@ -172,6 +184,11 @@ Do not ask about things you can infer or that have sensible defaults (use `enabl
    > ⚠️ **Set real values in the admin panel** (Settings → Environment) for these keys before using the API — they currently hold placeholders or must be verified: `STRIPE_API_KEY`, `WEBHOOK_SECRET`.
 
    Existing (encrypted) keys are included in the warning too, because you cannot tell from an `enc:` blob whether the user ever filled in a real value.
+5. **If the config includes a cloud `storage` driver with placeholder secrets**, end with a similar warning naming the storage credentials to set in the admin panel (Settings → Storage), e.g.:
+
+   > ⚠️ **Set real storage credentials in the admin panel** (Settings → Storage) before file uploads will work: `s3.secret` (and verify `s3.key`). They currently hold `__SET_IN_ADMIN_PANEL__` placeholders.
+
+   A `local` storage driver needs no credentials, so no warning is required for it.
 
 Example output structure:
 ```
@@ -228,7 +245,10 @@ Push this via the CLI: `POST /api/cli/tenants/{connection}/config`
 - [ ] `rate_limit` (if present) has shape `{ "enabled": bool, "requests_per_minute": int > 0 }`; omit the block entirely when no limit is desired
 - [ ] `cors` (if present) has shape `{ "allowed_origin": string }` where the value is `"*"` or one exact `scheme://host[:port]` origin with **no path** and no array; omit the block when CORS is not needed
 - [ ] Tables storing file paths use `varchar` columns
-- [ ] Do NOT generate `storage` config — storage driver is configured by the admin separately
+- [ ] When `file_endpoints` are generated, a `storage` driver is generated too (they go together) — default `driver: "local"` (no `config`) unless the user chose a cloud backend
+- [ ] `storage.driver` is one of `local`, `s3`, `ftp`, `sftp`, `gcs`, `azure`; per-driver `config` fields match reference.md (`local` needs no `config`)
+- [ ] `storage` secret fields (`s3.secret`, `ftp`/`sftp.password`, `gcs.key_file`, `azure.key`) use the `"__SET_IN_ADMIN_PANEL__"` placeholder for NEW config, are OMITTED when already stored as `enc:` (re-push), and are NEVER a real secret or `enc:` blob
+- [ ] `storage.max_file_size` (if present) is an integer byte count; `storage.allowed_mimes` (if present) is a string array
 
 ### Relational integrity
 - [ ] Every FK column (e.g. `user_id`, `post_id`, `category_id`) that references another table has a matching entry in `schema.relations`
