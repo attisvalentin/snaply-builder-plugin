@@ -96,11 +96,20 @@ When the intent spans multiple areas, generate all relevant sections. When gener
 
 ## Lite CLI variant
 
-Snaply ships in two variants. The **full CLI** (`snaply`) uses PostgreSQL + Redis Sentinel; the **lite CLI** (`snaply-lite`) uses SQLite files and a JSON tenant store. The push API and config JSON shape are **identical** — the same generated config works for both. You should detect lite when:
+Snaply ships in two variants. The **full CLI** (`snaply`) uses PostgreSQL + Redis Sentinel; the **lite CLI** (`snaply-lite`) uses SQLite files and a JSON tenant store. The push API and config JSON shape are **identical** — the same generated config works for both.
 
-- The `snaply-lite` binary is installed on PATH — confirm with `which snaply-lite` (typically `/usr/local/bin/snaply-lite`), especially when the full `snaply` CLI is absent
-- The user invokes commands as `snaply-lite ...`
-- The user mentions "lite", SQLite, no Redis, single binary, or `--no-cron`
+### Detect which CLI to use — do this first, before running any command
+
+Check both binaries on PATH (e.g. `which snaply` and `which snaply-lite`, typically under `/usr/local/bin/`), then:
+
+| Available | Action |
+|---|---|
+| Only `snaply-lite` | Use the **lite** CLI and apply the lite constraints below. |
+| Only `snaply` | Use the **full** CLI. |
+| **Both** | **Ask the user which one to use** before running anything — don't guess. |
+| Neither | Tell the user to install the CLI ([docs](https://snaply-admin-dev-o5uezc.free.laravel.cloud/docs/cli)) before you can push/pull. |
+
+Shortcut: if the user explicitly invokes `snaply-lite ...`, or mentions "lite", SQLite, no Redis, single binary, or `--no-cron`, use lite without asking. Once resolved, use that exact binary name (`snaply` or `snaply-lite`) consistently for **every** command (`me`, `tenants`, `show`, `push`, `pull`).
 
 When generating for lite, apply these extra constraints on top of the regular rules:
 
@@ -267,6 +276,8 @@ Push this via the CLI: `POST /api/cli/tenants/{connection}/config`
 - [ ] Cronjob steps do NOT reference `auth.*`, `request.*`, or `query.*` (unavailable in cron context)
 
 ## CLI Workflow
+
+> All commands below use `snaply` as the binary name. **First resolve which CLI is installed** (see "Lite CLI variant → Detect which CLI to use") and substitute `snaply-lite` everywhere if that's the resolved variant.
 
 ### Before generating: read the plan, then the existing config
 
